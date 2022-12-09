@@ -1,0 +1,291 @@
+---
+title: "Final Project: Results"
+author: "Lauren White"
+date: "2022-11-15"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+library(readr)
+library(dplyr)
+library(knitr)
+turtle_data <- read_csv("turtle_data.csv")
+dim(turtle_data)
+
+SADES <- read_csv("SADES.csv")
+dim(SADES)
+```
+
+```{r difficult}
+SADES$SADES_ID <- as.character(SADES$SADES_ID)
+class(SADES$SADES_ID)
+
+turtle_SADES <- left_join(turtle_data, SADES)
+dim(turtle_SADES)
+
+TSADES <- turtle_SADES %>%
+  select(SADES_ID, WT_US_D, WT_US_S, WW_US1, Riparian_Cont_US, LOS, Water_Depth_US, Water_Veloc_US, Embankment, Retaining_Wall_US, Embankment_Height_Slope_Rise, Slope_Run_US, Nesting_US, Road_Barrier_US, Type, Maintenance_needed, Road_length_US, Embankment_DS_D, Retaining_wall_DS, Embankment_height_DS, Slope_Run_DS, Nesting_DS, Road_barrier_DS, Type_DS, Maintenance_needed_DS, Road_Legth_DS, Wetland_Type_DS_D, WT_DS_S, Riparian_cont_DS, Water_depth_DS, Water_Veloc_DS, StructNum, StructType, StructMat, UsWidth, UsOpenHght, UsObstruct, StrScreen, CulWatDep, Wildlife_Shelf, StructLen, DsWidth, DsOpenHght, StrDomSub, StructSed, OutletDrop, OutTreat)
+
+dim(TSADES)
+summary(TSADES)
+head(TSADES)
+
+TSADES$Embankment_Height_Slope_Rise <- as.numeric(TSADES$Embankment_Height_Slope_Rise)
+TSADES$Slope_Run_US <- as.numeric(TSADES$Slope_Run_US)
+TSADES$Road_length_US <- as.numeric(TSADES$Road_length_US)
+TSADES$Embankment_height_DS <- as.numeric(TSADES$Embankment_height_DS)
+TSADES$Slope_Run_DS <- as.numeric(TSADES$Slope_Run_DS)
+TSADES$Road_Legth_DS <- as.numeric(TSADES$Road_Legth_DS)
+TSADES$WW_US1 <- as.numeric(TSADES$WW_US1)
+```
+
+
+```{r}
+TSADES <- TSADES %>% 
+  mutate(riskOutDrop=case_when(OutletDrop > 0.0 ~ 'HIGH',
+                               OutletDrop ==0.0 ~ ''))
+```
+
+```{r}
+TSADES <- TSADES %>% 
+  mutate(riskStrScreen=case_when(StrScreen == 'Inlet'~'HIGH',
+                                 StrScreen == 'Outlet' ~ 'HIGH',
+                                 StrScreen == 'Both' ~ 'HIGH',
+                                 StrScreen == 'None' ~ '',
+                                 StrScreen == 'No' ~ ''))
+```
+
+```{r, Ratio and LOS}
+TSADES <- TSADES %>% 
+  mutate(Open_Rat=ifelse(StructType=='Round Culvert', (((UsWidth*.5)^2)*3.14)/StructLen, (UsWidth*UsOpenHght)/StructLen))
+
+
+TSADES <- TSADES %>% 
+  mutate(riskOpenRat=case_when(Open_Rat <= 0.82 & LOS == 'N' ~ 'HIGH',
+                               Open_Rat <= 0.82 ~ '',
+                               Open_Rat > 0.82 ~ ''))
+```
+
+```{r, embankment slope}
+TSADES <- TSADES %>% 
+  mutate(riskESUS=case_when((Slope_Run_US/Embankment_Height_Slope_Rise) >=2 ~ 3, 
+                            (Slope_Run_US/Embankment_Height_Slope_Rise) <2 & (Slope_Run_US/Embankment_Height_Slope_Rise) > 1 ~ 2,
+                            (Slope_Run_US/Embankment_Height_Slope_Rise) <= 1 ~ 1))
+
+TSADES <- TSADES %>% 
+  mutate(riskESDS=case_when((Slope_Run_DS/Embankment_height_DS) >= 2 ~ 3, 
+                            (Slope_Run_DS/Embankment_height_DS) <2 & (Slope_Run_DS/Embankment_height_DS) > 1 ~ 2,
+                            (Slope_Run_DS/Embankment_height_DS) <= 1 ~ 1))
+```
+
+```{r, road barrier}
+TSADES <- TSADES %>% 
+  mutate(riskBarrierUS=case_when((Retaining_Wall_US) == 'Y' ~ 2,
+                             (Retaining_Wall_US) != 'Y' ~ 3))
+TSADES <- TSADES %>% 
+  mutate(riskBarrierDS=case_when((Retaining_wall_DS) == 'Y' ~ 2,
+                             (Retaining_wall_DS) != 'Y' ~ 3))
+
+
+```
+
+```{r, road length}
+TSADES <- TSADES %>% 
+  mutate(riskRoadLengthUS=case_when(Road_length_US >=100 ~ 3, Road_length_US >50 & Road_length_US <100 ~ 2, Road_length_US <=50 ~ 1))
+
+TSADES <- TSADES %>% 
+  mutate(riskRoadLengthDS=case_when(Road_Legth_DS >=100 ~ 3, Road_Legth_DS >50 & Road_Legth_DS <100 ~2, Road_Legth_DS <=50 ~ 1))
+```
+
+```{r, wetland habitat}
+TSADES <- TSADES %>% 
+  mutate(riskWTUS=case_when(WT_US_D == "PSS" ~ 3,
+                            WT_US_D != "PSS" & WT_US_S == 'PSS' ~ 2,
+                            WT_US_D != "PSS" & WT_US_S != 'PSS' ~ 1))
+
+TSADES <- TSADES %>% 
+  mutate(riskWTDS=case_when(Wetland_Type_DS_D == "PSS" ~ 3,
+                            Wetland_Type_DS_D != "PSS" & WT_DS_S == 'PSS' ~ 2,
+                            Wetland_Type_DS_D != "PSS" & WT_DS_S != 'PSS' ~ 1))
+
+```
+
+```{r, nesting}
+TSADES <- TSADES %>% 
+  mutate(riskNest=case_when(Nesting_US == "Y" & Nesting_DS == "Y" ~ 3,
+                            Nesting_US == "Y" & Nesting_DS == 'N' ~ 3,
+                            Nesting_US == "N" & Nesting_DS == "Y" ~ 3,
+                            Nesting_US == "N" & Nesting_DS == "N" ~ 1
+                            ))
+```
+
+```{r, riparian cont}
+TSADES <- TSADES %>% 
+  mutate(riskRipCont= case_when(Riparian_Cont_US == "Y" & Riparian_cont_DS == "Y" ~ 3,
+                                Riparian_Cont_US == "Y" & Riparian_cont_DS == "N" ~ 2,
+                                Riparian_Cont_US == "N" & Riparian_cont_DS == "Y" ~ 2,
+                                Riparian_Cont_US == "N" & Riparian_cont_DS == "N" ~ 1))
+```
+
+```{r, velocity}
+TSADES <- TSADES %>% 
+  mutate(riskVelocityUS=case_when(Water_Veloc_US == "fas" ~3, Water_Veloc_US == "sim" | Water_Veloc_US == "slo" | Water_Veloc_US == "und" ~1))
+
+TSADES <- TSADES %>% 
+  mutate(riskVelocityDS=case_when(Water_Veloc_DS == "fas" ~3, Water_Veloc_DS == "sim" | Water_Veloc_DS == "slo" | Water_Veloc_DS == "und" ~1 ))
+#should und be low risk? often zero water
+```
+
+```{r, water depth}
+TSADES <- TSADES %>% 
+  mutate(riskDepth=case_when(CulWatDep >= 2.0 & Wildlife_Shelf == "N" ~ 3,
+                             CulWatDep >1.0 & CulWatDep <2.0 & Wildlife_Shelf == "N"~ 2,
+                             CulWatDep <=1.0 | Wildlife_Shelf == "Y" ~ 1))
+
+```
+
+```{r, width}
+TSADES <- TSADES %>% 
+  mutate(riskWidth=case_when(UsWidth < 5 ~ 3,
+                             UsWidth >=5 & UsWidth >= (WW_US1*1.2) ~1,
+                             UsWidth < (WW_US1*1.2) & UsWidth >=5 ~2))
+```
+
+```{r, substrate}
+TSADES <- TSADES %>% 
+  mutate(riskSubstrate=case_when(StrDomSub == "Silt/Clay" ~1,
+                                 StrDomSub == "Sand" ~1,
+                                 StrDomSub == "Cobble" ~ 1,
+                                 StrDomSub == "Boulders" ~1,
+                                 StrDomSub == "None" & StructMat == "Concrete" ~2,
+                                 StrDomSub == "None" & StructMat == "Plastic-Corrugated" ~3,
+                                 StrDomSub == "None" & StructMat == "Steel-Corrugated"~2,
+                                 StrDomSub == "None" & StructMat == "Plastic-Smooth" ~3,
+                                 StrDomSub == "None" & StructMat == "Steel-Smooth" ~2,
+                                 StrDomSub == "None" & StructMat == "Aluminum-Corrugated" ~2,
+                                 StrDomSub == "None" & StructMat == "Wood" ~1,
+                                 StrDomSub == "None" & StructMat == "Stone" ~1
+  ))
+```
+
+```{r, length}
+TSADES <- TSADES %>% 
+  mutate(riskLength=case_when(StructLen >= 100 ~3,
+                              StructLen <100 & StructLen >80 ~2,
+                              StructLen <=80 ~1))
+```
+
+```{r, obstruction}
+TSADES <- TSADES %>% 
+  mutate(riskObstruct=case_when(UsObstruct != "None" ~2,
+                                UsObstruct == "None" ~1))
+```
+
+```{r, LOS}
+TSADES <- TSADES %>% 
+  mutate(riskLOS=case_when(LOS == 'N'~ 3, 
+                         LOS == 'P' ~ 2,
+                         LOS == 'F'~ 1))
+```
+
+```{r, OR}
+TSADES <- TSADES %>% 
+  mutate(riskOR=case_when(Open_Rat <= 0.82 ~ 3,
+                               Open_Rat > 0.82 & Open_Rat < 2.0 ~ 2,
+                               Open_Rat >= 2.0 ~ 1))
+```
+
+
+```{r}
+TSADES$Risk_Score <-rowSums(cbind(TSADES$riskESUS, TSADES$riskESDS, TSADES$riskBarrierUS, TSADES$riskBarrierDS, TSADES$riskRoadLengthUS, TSADES$riskRoadLengthDS, TSADES$riskWTUS, TSADES$riskWTDS, TSADES$riskNest, TSADES$riskRipCont, TSADES$riskVelocityUS, TSADES$riskVelocityDS, TSADES$riskDepth, TSADES$riskSubstrate, TSADES$riskLength, TSADES$riskWidth, TSADES$riskObstruct, TSADES$riskLOS, TSADES$riskOR), na.rm=TRUE) 
+
+TSADESrisk <- TSADES %>% 
+  select(SADES_ID, riskOutDrop, riskStrScreen, riskOpenRat, Risk_Score)
+```
+
+
+## Results
+
+The final data set consists of 248 culvert sites that were surveyed for numerous parameters related to turtle crossing ability and safety and analyzed for risk, categories into low, medium, and high. Three factors were determined important enough that if the site met a certain condition, this would automatically be labeled as high risk. The remaining factors were then given a score of 1 (low), 2 (med), or 3 (high) that were eventually calculated into a great "risk" score. Table 1 depicts each site ID and its assessment of risk. 
+
+
+```{r}
+TSADESrisk_clean <- TSADESrisk %>% 
+  filter((!row_number() %in% c(21)))
+
+library(knitr)
+TSADESrisk_clean <- na.omit(TSADESrisk)
+TSADESrisk_clean$NumHigh <- rowSums(TSADESrisk_clean=="HIGH")
+TSADESrisk_clean <- TSADESrisk_clean %>% 
+  mutate(Rank=case_when(Risk_Score <= 29 ~ 'LOW',
+                        Risk_Score >=30 & Risk_Score <=41 ~ 'MED',
+                        Risk_Score >=41 ~ "HIGH"))
+
+knitr::kable(TSADESrisk_clean, align = "lcc", caption = "Table 1")
+
+TSADESrisk_clean <- TSADESrisk_clean %>% 
+  mutate(Out=case_when(riskOutDrop == "HIGH" ~1)) %>% 
+  mutate(Screen=case_when(riskStrScreen == "HIGH" ~1)) %>% 
+  mutate(OR=case_when(riskOpenRat == "HIGH" ~1))
+  
+library(writexl)
+write_xlsx(TSADESrisk_clean, '/Users/laurenwhite/Downloads/3.Data Science/Turtle_SADES_nov21.xlsx')
+
+```
+
+With a range of scores from 22 to 46, there is a slight distribution of sites with scores towards the higher end (mean = 36.25, SD = 4.85) (Fig. 1). 
+
+To compare how the three 'high risk' factors relate to the overall calculated risk score, three boxplot graphs visualize the difference in means (Fig. 2-4). Risk rated as High or None for Outlet Drop represents if the culvert is perched or not. Presence of a perch seems to also correlate with a higher Risk Score (Fig. 2). In fact, for each of these high risk parameters, the presence of "HIGH" risk corresponds with a larger mean Risk Score (Fig. 3 & 4). The t-test, if done right, indicate all three relationships are <0.05 and therefore there is a difference in mean of Risk Score based on presence of HIGH risk designation in each of the three parameters. 
+
+```{r}
+library(ggplot2)
+ggplot(TSADESrisk_clean, aes(x = Risk_Score)) + geom_bar() + labs(x= 'Risk Score', y = 'Number of Sites', title = "Fig. 1- Distribution")
+
+ggplot(TSADESrisk_clean, aes(y = Risk_Score, x=riskOutDrop)) + geom_boxplot() + labs(x= 'Number of Sites', y = 'Risk Score', title = "Fig. 2- Risk of Outlet Drop")
+
+ggplot(TSADESrisk_clean, aes(y = Risk_Score, x=riskStrScreen)) + geom_boxplot() + labs(x= 'Number of Sites', y = 'Risk Score', title = "Fig. 3- Risk of Screen Structure")
+
+ggplot(TSADESrisk_clean, aes(y = Risk_Score, x=riskOpenRat)) + geom_boxplot() + labs(x= 'Number of Sites', y = 'Risk Score', title = "Fig. 4- Risk of Openness Ratio")
+```
+
+
+A quick summary of the three 'high risk' factors show that 65 sites are at high risk because of an outlet drop, 44 sites are at high risk because of a screen blocking the structure inlet or outlet, and 30 sites are at high risk because the openness ratio (area of inlet divided by length of structure) is considered too low (<0.82). The column NumHigh in Table 1 shows how many 'high' designation each site has received through this analysis process. A scatterplot depicting Risk Scores against number of "High" designations highlights a few sites with high risk from both measurements (Fig. 5). These are the sites that will require first attention when picking sites suitable for restoration. 
+
+```{r}
+library(sf)
+library(ggrepel)
+ggplot(TSADESrisk_clean, aes(x=Risk_Score, y=NumHigh)) +geom_point() +labs(x='Risk Score', y = "Number of HIGH Risk", title = "Fig. 5- High Risk and Risk Score")
+
+```
+A lot of this code was used to compile Table 1 and all its risk calculations. However, for further results, I am unsure about other methods of analyzing this table of information. Any suggestions on other ways to think about this would be very helpful. One consideration would be to try an interactive graph package to be able to identify the site IDs easier in Fig. 5. 
+
+
+```{r}
+colSums(TSADESrisk_clean == 'HIGH')
+
+range(TSADESrisk_clean$Risk_Score)
+mean(TSADESrisk_clean$Risk_Score)
+sd(TSADESrisk_clean$Risk_Score)
+```
+```{r, t-tests}
+t.test(TSADESrisk_clean$Risk_Score, y=TSADESrisk_clean$Out,
+       alternative = c("two.sided"),
+      paired = TRUE, var.equal = FALSE,
+       conf.level = 0.95)
+
+t.test(TSADESrisk_clean$Risk_Score, y=TSADESrisk_clean$Screen,
+       alternative = c("two.sided"),
+      paired = TRUE, var.equal = FALSE,
+       conf.level = 0.95)
+
+t.test(TSADESrisk_clean$Risk_Score, y=TSADESrisk_clean$OR,
+       alternative = c("two.sided"),
+      paired = TRUE, var.equal = FALSE,
+       conf.level = 0.95)
+```
+
+
